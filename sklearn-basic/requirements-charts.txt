@@ -1,0 +1,3 @@
+# Chart/reporting dependencies for this template (reporting environment).
+matplotlib
+

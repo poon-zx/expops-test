@@ -1,0 +1,55 @@
+metadata:
+  name: "sklearn-basic"
+  description: "Template project: custom pipeline (sklearn inside) + simple reporting chart"
+  version: "1.0.0"
+
+scripts:
+  main: "src/model.py"
+  reporting: "src/plot_metrics.py"
+
+environment:
+  sklearn-basic-env: 
+    venv: ["sklearn-basic/requirements.txt"]
+  sklearn-basic-env-reporting: 
+    venv: ["requirements-charts.txt"]
+
+reproducibility:
+  random_seed: 42
+
+data:
+  path: "data/train.csv"
+
+experiment:
+  framework: "custom"
+  language: "python"
+  name: "sklearn_basic_custom"
+  version: "1.0.0"
+  parameters:
+    cache:
+      backend:
+        # Local-first default
+        type: local
+        # --- GCP example (Firestore + Pub/Sub) ---
+        # type: gcp
+        # gcp_project: <your-gcp-project-id>
+        # credentials_json: firestore.json
+      # Optional object store for cache artifacts.
+      # object_store:
+      #   type: gcs
+      #   bucket: <your-gcs-bucket-name>
+    pipeline:
+      process_adjlist: |
+        train_model evaluate_model
+        evaluate_model plot_metrics
+      processes:
+        - name: "train_model"
+
+        - name: "evaluate_model"
+
+        - name: "plot_metrics"
+          code: "reporting.plot_metrics"
+          environment: "sklearn-basic-env-reporting"
+          probe_paths:
+            train: "//*[@name='train_model']"
+            eval: "//*[@name='evaluate_model']"
+

@@ -1,0 +1,21 @@
+# Project outputs and runtime
+.sklearn-basic/
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+.eggs/
+
+# Environment and tooling
+.env
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.DS_Store

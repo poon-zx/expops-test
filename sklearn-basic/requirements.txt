@@ -1,0 +1,10 @@
+# Project runtime dependencies for this template.
+#
+# Note: ExpOps (`expops`) itself is installed into the project venv automatically
+# when you run `expops run <project-id>`.
+
+pandas
+numpy
+scikit-learn
+joblib
+
