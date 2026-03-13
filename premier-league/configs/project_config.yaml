@@ -1,0 +1,189 @@
+metadata:
+  name: "premier-league"
+  description: "Premier League 3-class classification with generic FE, NN A/B, XGB A/B, logistic baseline, and ensemble"
+  version: "1.0.0"
+
+scripts:
+  main: "src/premier_league_model.py"
+  reporting: "src/plot_metrics.py"
+  reporting_js: "src/plot_metrics.js"
+
+environment:
+  premier-league-env: 
+    venv: ["requirements.txt"]
+  premier-league-env-reporting: 
+    venv: ["requirements-charts.txt"]
+
+reproducibility:
+  random_seed: 43
+
+data:
+  path: "data/England CSV.csv"
+
+experiment:
+  framework: "custom"
+  language: "python"
+  name: "premier_league_model"
+  version: "1.0.0"
+  parameters:
+    cache:
+      backend:
+        type: gcp
+        gcp_project: mlops-platform-470017
+        credentials_json: src/firestore.json
+      object_store:
+        type: gcs
+        bucket: mlops-platform123
+    parameters:
+      test_size: 0.2
+      pca_components: 21
+
+    pipeline:
+      process_adjlist: |
+        feature_engineering_generic pca_scree
+        feature_engineering_generic goals_distribution
+        feature_engineering_generic nn_data_parallel
+        nn_data_parallel nn_seed_parallel
+        nn_seed_parallel preprocess_linear_nn
+        nn_seed_parallel preprocess_xgb
+        preprocess_linear_nn linear_training
+        preprocess_linear_nn nn_training_a
+        preprocess_linear_nn nn_training_b
+        preprocess_xgb xgb_training_a
+        preprocess_xgb xgb_training_b
+        linear_training linear_inference
+        nn_training_a nn_inference_a
+        nn_training_b nn_inference_b
+        xgb_training_a xgb_inference_a
+        xgb_training_b xgb_inference_b
+        nn_inference_a nn_best_selection
+        nn_inference_b nn_best_selection
+        xgb_inference_a xgb_best_selection
+        xgb_inference_b xgb_best_selection
+        nn_best_selection nn_best_inference
+        xgb_best_selection xgb_best_inference
+        linear_training ensemble_inference
+        nn_best_selection ensemble_inference
+        xgb_best_selection ensemble_inference
+        linear_inference nn_partition_aggregate
+        nn_best_inference nn_partition_aggregate
+        xgb_best_inference nn_partition_aggregate
+        ensemble_inference nn_partition_aggregate
+        nn_partition_aggregate test_metrics_comparison
+
+      processes:
+        - name: "feature_engineering_generic"
+
+        - name: "nn_data_parallel"
+          data_parallelism:
+            size: 2
+            data_name: df
+
+        - name: "nn_seed_parallel"
+          seed_parallelism:
+            seeds: [41, 42]
+
+        - name: "nn_partition_aggregate"
+          data_aggregation: true
+          seed_aggregation: true
+
+        - name: "preprocess_linear_nn"
+
+        - name: "preprocess_xgb"
+
+        - name: "linear_training"
+
+        - name: "nn_training_a"
+          code: "define_nn_training_process"
+          parameters:
+            hidden_layers: [128, 64]
+            learning_rate: 0.002
+            epochs: 50
+
+        - name: "nn_training_b"
+          code: "define_nn_training_process"
+          parameters:
+            hidden_layers: [256, 128, 64]
+            learning_rate: 0.0008
+            epochs: 50
+
+        - name: "xgb_training_a"
+          code: "define_xgb_training_process"
+          parameters:
+            n_estimators: 350
+            max_depth: 4
+            learning_rate: 0.1
+            subsample: 0.8
+            colsample_bytree: 0.9
+
+        - name: "xgb_training_b"
+          code: "define_xgb_training_process"
+          parameters:
+            n_estimators: 500
+            max_depth: 8
+            learning_rate: 0.05
+            subsample: 0.8
+            colsample_bytree: 0.8
+
+        - name: "nn_inference_a"
+          code: "define_nn_inference_process"
+          parameters:
+            train_key: nn_training_a
+
+        - name: "nn_inference_b"
+          code: "define_nn_inference_process"
+          parameters:
+            train_key: nn_training_b
+
+        - name: "xgb_inference_a"
+          code: "define_xgb_inference_process"
+          parameters:
+            train_key: xgb_training_a
+
+        - name: "xgb_inference_b"
+          code: "define_xgb_inference_process"
+          parameters:
+            train_key: xgb_training_b
+
+        - name: "linear_inference"
+
+        - name: "nn_best_selection"
+
+        - name: "xgb_best_selection"
+
+        - name: "nn_best_inference"
+
+        - name: "xgb_best_inference"
+
+        - name: "ensemble_inference"
+
+        - name: "pca_scree"
+          description: "Render PCA scree plot"
+          code: "reporting.pca_scree"
+          environment: "premier-league-env-reporting"
+          probe_paths:
+            feat: "//*[@name='feature_analysis']"
+
+        - name: "goals_distribution"
+          code: "reporting.goals_distribution"
+          environment: "premier-league-env-reporting"
+          probe_paths:
+            feat: "//*[@name='derive_labels_and_indices']"
+
+        - name: "test_metrics_comparison"
+          code: "reporting.test_metrics_comparison"
+          environment: "premier-league-env-reporting"
+          probe_paths:
+            linear: "//*[@name='linear_inference']/*[@name='test_inference_classification']"
+            nn_best: "//*[@name='nn_best_inference']/*[@name='test_inference_classification']"
+            xgb_best: "//*[@name='xgb_best_inference']/*[@name='test_inference_classification']"
+            ensemble: "//*[@name='ensemble_inference']"
+
+        - name: "nn_losses"
+          code: "reporting_js.nn_losses"
+          environment: "premier-league-env-reporting"
+          chart_type: "dynamic"
+          probe_paths:
+            nn_a_p1_seed41: "//*[@partition='p1']/*[@seed='41']/*[@name='nn_training_a']/*[@name='train_and_evaluate_nn_classifier']"
+            nn_a_p2_seed41: "//*[@partition='p2']/*[@seed='41']/*[@name='nn_training_a']/*[@name='train_and_evaluate_nn_classifier']"
+            nn_a_p1_seed42: "//*[@partition='p1']/*[@seed='42']/*[@name='nn_training_a']/*[@name='train_and_evaluate_nn_classifier']"

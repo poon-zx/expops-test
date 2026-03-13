@@ -1,0 +1,12 @@
+provider: slurm
+
+num_workers: 4
+
+options:
+  queue: "normal" #cpu
+  worker_cores: 1
+  worker_memory: "3GB"
+  worker_processes: 1
+  queue: null
+  walltime: "01:00:00"
+  scheduler_address: ""
