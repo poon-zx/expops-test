@@ -1,0 +1,30 @@
+metadata:
+  name: expops-test-project
+  description: A new component-authored pipeline for expops-test.
+  version: 1.0.0
+scripts: {}
+environment:
+  sklearn-env:
+    venv:
+      - requirements.txt
+reproducibility:
+  random_seed: 42
+data:
+  path: data/train.csv
+experiment:
+  cache:
+    backend:
+      type: local
+  pipeline:
+    process_adjlist: data_source logisticregression_fit
+    processes:
+      - name: data_source
+        type: process
+        component: sklearn.csv_to_xy
+        parameters:
+          label_column: label
+      - name: logisticregression_fit
+        type: process
+        component: sklearn.LogisticRegression.fit
+        parameters:
+          max_iter: 200
