@@ -119,7 +119,46 @@ def feature_engineering_generic(
     pca_components: int = 16,
     random_seed: int = 42,
 ):
-    """Load CSV, parse dates, derive labels (H/D/A), stratified split indices, and log analysis metrics."""
+    """
+    Load the Premier League CSV, derive labels, and log feature-analysis metrics.
+
+    This process:
+    - Reads the dataset from `<project_root>/data/England CSV.csv`.
+    - Derives date features (`DayOfWeek`, `Month`) when a `Date` column exists.
+    - Derives outcome labels from `FT Result` or `FTR` using mapping
+      `H -> 0`, `D -> 1`, `A -> 2`.
+    - Logs goal histograms (when `FTH Goals`/`FTA Goals` exist) and PCA
+      explained variance metrics over the engineered feature matrix.
+
+    Parameters
+    ----------
+    test_size : float, default=0.2
+        Fraction of rows to reserve for testing when later preprocessing steps
+        create a train/test split. This value is passed through to the internal
+        label/index derivation step.
+    pca_components : int, default=16
+        Target number of PCA components used for feature analysis. The actual
+        number is clipped to the available feature dimension.
+    random_seed : int, default=42
+        Random seed used for PCA reproducibility.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **df** (`dict[str, list]`): Raw dataframe serialized as column-oriented lists.
+        - **columns** (`list[str]`): Column names from the loaded CSV.
+        - **labels** (`list[int]`): Outcome labels aligned to `df` rows with values
+          in `{0, 1, 2}` corresponding to `{H, D, A}`.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the source CSV does not exist at the expected path.
+    ValueError
+        If the result column is missing or contains unexpected values.
+    """
 
     @step()
     def load_csv():
@@ -217,7 +256,20 @@ def feature_engineering_generic(
 def nn_data_parallel(
     df,
 ):
-    """Prepare row-wise data for data parallelism split."""
+    """
+    Convert a column-oriented dataframe payload into row-wise records.
+
+    Parameters
+    ----------
+    df : dict[str, list] or pandas.DataFrame or array-like
+        Data payload representing the dataset. Commonly this is the `df` output
+        from `feature_engineering_generic`, i.e. a dict of column names to lists.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        List of per-row records suitable for downstream data-parallel branches.
+    """
     frame = pd.DataFrame(df)
     rows = frame.to_dict(orient="records")
     return rows
@@ -225,7 +277,19 @@ def nn_data_parallel(
 
 @process()
 def nn_partition_aggregate(rows: Dict[str, Any] | None = None):
-    """No-op aggregation placeholder for data-parallel branches."""
+    """
+    Aggregate results from data-parallel branches (currently a no-op).
+
+    Parameters
+    ----------
+    rows : dict[str, Any] or None, default=None
+        Placeholder for aggregated branch outputs.
+
+    Returns
+    -------
+    dict
+        Empty dictionary.
+    """
     return {}
 
 
@@ -236,7 +300,46 @@ def preprocess_linear_nn(
     random_seed: int = 42,
     columns: list[str] | None = None,
 ):
-    """Preprocess for Linear/NN: OHE categorical + StandardScaler numeric."""
+    """
+    Preprocess data for linear / neural network classifiers.
+
+    Creates a train/test split (stratified by outcome when possible), then
+    builds a feature matrix using:
+    - One-hot encoding for categorical columns.
+    - Standard scaling for numeric columns.
+
+    Date-derived columns (`DayOfWeek`, `Month`) are created if missing.
+
+    Parameters
+    ----------
+    df : dict[str, list] or pandas.DataFrame
+        Dataset payload, typically the `df` output from `feature_engineering_generic`.
+    test_size : float, default=0.2
+        Fraction of samples allocated to the test split.
+    random_seed : int, default=42
+        Seed for the train/test split random state.
+    columns : list[str] or None, default=None
+        Optional column list (currently unused; kept for pipeline compatibility).
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **X_train** (`list[list[float]]`): Training feature matrix.
+        - **X_test** (`list[list[float]]`): Test feature matrix.
+        - **y_train** (`list[int]`): Training labels in `{0, 1, 2}`.
+        - **y_test** (`list[int]`): Test labels in `{0, 1, 2}`.
+        - **row_indices_train** (`list[int]`): Row indices (into original `df`) for train split.
+        - **row_indices_test** (`list[int]`): Row indices (into original `df`) for test split.
+        - **n_train** (`int`): Number of training samples.
+        - **n_test** (`int`): Number of test samples.
+
+    Raises
+    ------
+    ValueError
+        If label derivation fails due to missing/invalid result column values.
+    """
     df = pd.DataFrame(df)
     y = _derive_outcome_labels(df)
     idx = np.arange(len(df))
@@ -303,7 +406,46 @@ def preprocess_xgb(
     random_seed: int = 42,
     columns: list[str] | None = None,
 ):
-    """Preprocess for XGB: OHE categorical only (no scaling)."""
+    """
+    Preprocess data for XGBoost multi-class classification.
+
+    Creates a train/test split (stratified by outcome when possible), then
+    builds a feature matrix using:
+    - One-hot encoding for categorical columns.
+    - Passing numeric columns through without scaling.
+
+    Date-derived columns (`DayOfWeek`, `Month`) are created if missing.
+
+    Parameters
+    ----------
+    df : dict[str, list] or pandas.DataFrame
+        Dataset payload, typically the `df` output from `feature_engineering_generic`.
+    test_size : float, default=0.2
+        Fraction of samples allocated to the test split.
+    random_seed : int, default=42
+        Seed for the train/test split random state.
+    columns : list[str] or None, default=None
+        Optional column list (currently unused; kept for pipeline compatibility).
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **X_train** (`list[list[float]]`): Training feature matrix.
+        - **X_test** (`list[list[float]]`): Test feature matrix.
+        - **y_train** (`list[int]`): Training labels in `{0, 1, 2}`.
+        - **y_test** (`list[int]`): Test labels in `{0, 1, 2}`.
+        - **row_indices_train** (`list[int]`): Row indices (into original `df`) for train split.
+        - **row_indices_test** (`list[int]`): Row indices (into original `df`) for test split.
+        - **n_train** (`int`): Number of training samples.
+        - **n_test** (`int`): Number of test samples.
+
+    Raises
+    ------
+    ValueError
+        If label derivation fails due to missing/invalid result column values.
+    """
     df = pd.DataFrame(df)
     y = _derive_outcome_labels(df)
     idx = np.arange(len(df))
@@ -509,6 +651,38 @@ def linear_training(
     row_indices_test,
     logreg_params: Dict[str, Any] | None = None,
 ):
+    """
+    Train a logistic regression classifier for multi-class outcome prediction.
+
+    This process wraps the `train_logistic_classifier` step and packages the
+    trained model alongside the provided test split for downstream inference.
+
+    Parameters
+    ----------
+    X_train : array-like
+        Training features with shape `(n_train, n_features)`.
+    y_train : array-like
+        Training labels with shape `(n_train,)` and values in `{0, 1, 2}`.
+    X_test : array-like
+        Test features with shape `(n_test, n_features)`.
+    y_test : array-like
+        Test labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+    logreg_params : dict[str, Any] or None, default=None
+        Optional hyperparameters forwarded to `LogisticRegression`, supporting
+        keys like `max_iter` and `class_weight`.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **model** (`sklearn.linear_model.LogisticRegression`): Trained classifier.
+        - **X_test**: The provided `X_test`.
+        - **y_test**: The provided `y_test`.
+        - **row_indices_test**: The provided `row_indices_test`.
+    """
     prep = {"X_train": X_train, "y_train": y_train}
     result = train_logistic_classifier(prep_data=prep, logreg_params=logreg_params)
     result["X_test"] = X_test
@@ -530,6 +704,47 @@ def define_nn_training_process(
     random_seed: int | None = None,
     branch_name: str = "",
 ):
+    """
+    Train an MLP (neural network) classifier and package artifacts for inference.
+
+    This process wraps `train_and_evaluate_nn_classifier` and returns the trained
+    model plus the provided test split.
+
+    Parameters
+    ----------
+    X_train : array-like
+        Training features with shape `(n_train, n_features)`.
+    y_train : array-like
+        Training labels with shape `(n_train,)` and values in `{0, 1, 2}`.
+    X_test : array-like
+        Test features with shape `(n_test, n_features)`.
+    y_test : array-like
+        Test labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+    hidden_layers : list[int] or tuple[int, ...] or None, default=None
+        Hidden layer sizes passed to `MLPClassifier(hidden_layer_sizes=...)`.
+        Defaults to `(128, 64)` when not provided.
+    learning_rate : float, default=0.001
+        Initial learning rate for the MLP optimizer.
+    epochs : int, default=50
+        Number of training epochs simulated by repeatedly calling `.fit(...)`
+        with `warm_start=True`.
+    random_seed : int or None, default=None
+        Random seed for the classifier. Defaults internally when None.
+    branch_name : str, default=""
+        Optional name used to label logged metrics/warnings.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **model** (`sklearn.neural_network.MLPClassifier`): Trained classifier.
+        - **X_test**: The provided `X_test`.
+        - **y_test**: The provided `y_test`.
+        - **row_indices_test**: The provided `row_indices_test`.
+    """
     prep = {"X_train": X_train, "y_train": y_train}
     result = train_and_evaluate_nn_classifier(
         prep_data=prep,
@@ -554,6 +769,37 @@ def define_xgb_training_process(
     row_indices_test,
     **xgb_params: Any,
 ):
+    """
+    Train an XGBoost classifier and package artifacts for inference.
+
+    This process wraps `train_xgb_classifier` and returns the trained model plus
+    the provided test split.
+
+    Parameters
+    ----------
+    X_train : array-like
+        Training features with shape `(n_train, n_features)`.
+    y_train : array-like
+        Training labels with shape `(n_train,)` and values in `{0, 1, 2}`.
+    X_test : array-like
+        Test features with shape `(n_test, n_features)`.
+    y_test : array-like
+        Test labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+    **xgb_params : Any
+        Keyword parameters forwarded to `xgboost.XGBClassifier` construction.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **model** (`xgboost.XGBClassifier`): Trained classifier.
+        - **X_test**: The provided `X_test`.
+        - **y_test**: The provided `y_test`.
+        - **row_indices_test**: The provided `row_indices_test`.
+    """
     prep = {"X_train": X_train, "y_train": y_train}
     result = train_xgb_classifier(prep_data=prep, xgb_params=xgb_params or None)
     result["X_test"] = X_test
@@ -564,6 +810,35 @@ def define_xgb_training_process(
 
 @process()
 def linear_inference(model, X_test, y_test, row_indices_test):
+    """
+    Run inference for a linear model and compute classification metrics.
+
+    Parameters
+    ----------
+    model : sklearn.base.ClassifierMixin
+        Trained estimator implementing `predict(X)` and optionally `predict_proba(X)`.
+    X_test : array-like
+        Test feature matrix with shape `(n_test, n_features)`.
+    y_test : array-like
+        True labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+
+    Returns
+    -------
+    dict
+        Dictionary with a single key **linear_inference** mapping to a result dict
+        containing:
+
+        - **test_accuracy** (`float`)
+        - **test_precision** (`float`)
+        - **test_f1** (`float`)
+        - **model**: The provided `model`.
+        - **X_test**: The provided `X_test`.
+        - **y_test**: The provided `y_test`.
+        - **row_indices_test**: The provided `row_indices_test`.
+        - **source_training** (`str`): `"linear_training"`.
+    """
     result = test_inference_classification(model=model, X_test=X_test, y_test=y_test)
     result["model"] = model
     result["X_test"] = X_test
@@ -581,6 +856,38 @@ def define_nn_inference_process(
     row_indices_test,
     train_key: str = "nn_training_a",
 ):
+    """
+    Run inference for a neural-network model and emit a dynamically named output.
+
+    The returned dictionary key is derived from `train_key` by replacing the first
+    occurrence of `"training"` with `"inference"` when present; otherwise a
+    fallback key is used.
+
+    Parameters
+    ----------
+    model : sklearn.base.ClassifierMixin
+        Trained estimator implementing `predict(X)` and optionally `predict_proba(X)`.
+    X_test : array-like
+        Test feature matrix with shape `(n_test, n_features)`.
+    y_test : array-like
+        True labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+    train_key : str, default="nn_training_a"
+        Name of the training branch that produced `model`.
+
+    Returns
+    -------
+    dict
+        Single-key dictionary whose key is the derived inference name and whose
+        value is a result dict containing:
+
+        - **test_accuracy** (`float`)
+        - **test_precision** (`float`)
+        - **test_f1** (`float`)
+        - **model**, **X_test**, **y_test**, **row_indices_test**
+        - **source_training** (`str`): `train_key`
+    """
     result = test_inference_classification(model=model, X_test=X_test, y_test=y_test)
     result["model"] = model
     result["X_test"] = X_test
@@ -599,6 +906,38 @@ def define_xgb_inference_process(
     row_indices_test,
     train_key: str = "xgb_training_a",
 ):
+    """
+    Run inference for an XGBoost model and emit a dynamically named output.
+
+    The returned dictionary key is derived from `train_key` by replacing the first
+    occurrence of `"training"` with `"inference"` when present; otherwise a
+    fallback key is used.
+
+    Parameters
+    ----------
+    model : xgboost.XGBClassifier
+        Trained estimator implementing `predict(X)` and `predict_proba(X)`.
+    X_test : array-like
+        Test feature matrix with shape `(n_test, n_features)`.
+    y_test : array-like
+        True labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+    train_key : str, default="xgb_training_a"
+        Name of the training branch that produced `model`.
+
+    Returns
+    -------
+    dict
+        Single-key dictionary whose key is the derived inference name and whose
+        value is a result dict containing:
+
+        - **test_accuracy** (`float`)
+        - **test_precision** (`float`)
+        - **test_f1** (`float`)
+        - **model**, **X_test**, **y_test**, **row_indices_test**
+        - **source_training** (`str`): `train_key`
+    """
     result = test_inference_classification(model=model, X_test=X_test, y_test=y_test)
     result["model"] = model
     result["X_test"] = X_test
@@ -611,6 +950,27 @@ def define_xgb_inference_process(
 
 @process()
 def nn_best_selection(nn_inference_a, nn_inference_b):
+    """
+    Select the best NN inference result based on macro F1 score.
+
+    Parameters
+    ----------
+    nn_inference_a : dict or None
+        Inference result dictionary for candidate A, expected to contain
+        `test_f1` and optionally `model`, `X_test`, `y_test`, `row_indices_test`.
+    nn_inference_b : dict or None
+        Inference result dictionary for candidate B, with the same schema as A.
+
+    Returns
+    -------
+    dict
+        Dictionary containing key **nn_best_selection** which maps to:
+
+        - **model**: Selected model object (if present).
+        - **X_test**, **y_test**, **row_indices_test**: Selected artifacts (if present).
+        - **f1** (`float`): Best macro F1 score.
+        - **best_key** (`str`): `"nn_training_a"` or `"nn_training_b"`.
+    """
     inf_a = nn_inference_a or {}
     inf_b = nn_inference_b or {}
     f1_a = float(inf_a.get("test_f1", 0.0) or 0.0)
@@ -638,6 +998,27 @@ def nn_best_selection(nn_inference_a, nn_inference_b):
 
 @process()
 def xgb_best_selection(xgb_inference_a, xgb_inference_b):
+    """
+    Select the best XGB inference result based on macro F1 score.
+
+    Parameters
+    ----------
+    xgb_inference_a : dict or None
+        Inference result dictionary for candidate A, expected to contain
+        `test_f1` and optionally `model`, `X_test`, `y_test`, `row_indices_test`.
+    xgb_inference_b : dict or None
+        Inference result dictionary for candidate B, with the same schema as A.
+
+    Returns
+    -------
+    dict
+        Dictionary containing key **xgb_best_selection** which maps to:
+
+        - **model**: Selected model object (if present).
+        - **X_test**, **y_test**, **row_indices_test**: Selected artifacts (if present).
+        - **f1** (`float`): Best macro F1 score.
+        - **best_key** (`str`): `"xgb_training_a"` or `"xgb_training_b"`.
+    """
     inf_a = xgb_inference_a or {}
     inf_b = xgb_inference_b or {}
     f1_a = float(inf_a.get("test_f1", 0.0) or 0.0)
@@ -665,6 +1046,24 @@ def xgb_best_selection(xgb_inference_a, xgb_inference_b):
 
 @process()
 def nn_best_inference(nn_best_selection):
+    """
+    Compute inference metrics for the selected NN model.
+
+    Parameters
+    ----------
+    nn_best_selection : dict or None
+        Output from `nn_best_selection`, expected to contain `model`, `X_test`,
+        and `y_test` keys.
+
+    Returns
+    -------
+    dict
+        Dictionary containing key **nn_best_inference** mapping to:
+
+        - **test_accuracy** (`float`)
+        - **test_precision** (`float`)
+        - **test_f1** (`float`)
+    """
     sel = nn_best_selection or {}
     result = test_inference_classification(model=sel.get("model"), X_test=sel.get("X_test"), y_test=sel.get("y_test"))
     return {"nn_best_inference": result}
@@ -672,6 +1071,24 @@ def nn_best_inference(nn_best_selection):
 
 @process()
 def xgb_best_inference(xgb_best_selection):
+    """
+    Compute inference metrics for the selected XGB model.
+
+    Parameters
+    ----------
+    xgb_best_selection : dict or None
+        Output from `xgb_best_selection`, expected to contain `model`, `X_test`,
+        and `y_test` keys.
+
+    Returns
+    -------
+    dict
+        Dictionary containing key **xgb_best_inference** mapping to:
+
+        - **test_accuracy** (`float`)
+        - **test_precision** (`float`)
+        - **test_f1** (`float`)
+    """
     sel = xgb_best_selection or {}
     result = test_inference_classification(model=sel.get("model"), X_test=sel.get("X_test"), y_test=sel.get("y_test"))
     return {"xgb_best_inference": result}
@@ -686,6 +1103,42 @@ def ensemble_inference(
     nn_best_selection,
     xgb_best_selection,
 ):
+    """
+    Compute an ensemble prediction from linear and XGB models (soft voting).
+
+    The ensemble currently combines:
+    - The provided linear model (`model`) evaluated on `X_test` / `row_indices_test`.
+    - The XGB model selected in `xgb_best_selection`, aligned to the linear test
+      rows by `row_indices_test` when possible.
+
+    Probabilities are combined using equal weights (unless overridden internally),
+    and macro classification metrics are logged and returned.
+
+    Parameters
+    ----------
+    model : sklearn.base.ClassifierMixin
+        Linear model implementing `predict(X)` and optionally `predict_proba(X)`.
+    X_test : array-like
+        Test features for the linear model with shape `(n_test, n_features)`.
+    y_test : array-like
+        True labels with shape `(n_test,)` and values in `{0, 1, 2}`.
+    row_indices_test : array-like
+        Row indices mapping each test row back to the original dataset.
+    nn_best_selection : dict or None
+        Output from `nn_best_selection` (currently unused in the ensemble logic).
+    xgb_best_selection : dict or None
+        Output from `xgb_best_selection`, expected to contain `model`, `X_test`,
+        and `row_indices_test` for the XGB candidate.
+
+    Returns
+    -------
+    dict
+        Dictionary containing key **ensemble_inference** mapping to:
+
+        - **test_accuracy** (`float`)
+        - **test_precision** (`float`)
+        - **test_f1** (`float`)
+    """
     xgb_sel = xgb_best_selection or {}
 
     lin_model = model

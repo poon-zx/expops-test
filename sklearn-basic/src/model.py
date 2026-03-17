@@ -45,6 +45,24 @@ def _validation_csv_path() -> Path:
 
 @process()
 def train_model():
+    """
+    Train a logistic regression classifier on the project training CSV.
+
+    The training dataset is loaded from `<project_root>/data/train.csv` where
+    `<project_root>` is resolved via `MLOPS_WORKSPACE_DIR` and `MLOPS_PROJECT_ID`
+    when available.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+
+        - **model** (`sklearn.linear_model.LogisticRegression`): Fitted classifier.
+    """
     train_path = _training_csv_path()
     x, y = _load_xy(train_path)
     model = LogisticRegression(max_iter=200)
@@ -58,6 +76,29 @@ def train_model():
 
 @process()
 def evaluate_model(model):
+    """
+    Evaluate a trained classifier on the validation CSV and log accuracy.
+
+    The validation dataset is currently the same path as the training dataset
+    (`<project_root>/data/train.csv`).
+
+    Parameters
+    ----------
+    model : sklearn.base.ClassifierMixin
+        Trained estimator implementing `predict(X)`.
+
+    Returns
+    -------
+    dict
+        Empty dictionary. Metrics are logged via `log_metric`.
+
+    Raises
+    ------
+    ValueError
+        If `model` is None (missing upstream output from `train_model`).
+    FileNotFoundError
+        If the validation CSV does not exist at the expected path.
+    """
     if model is None:
         raise ValueError("Missing upstream model. Expected `model` from training process.")
 
