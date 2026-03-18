@@ -827,17 +827,8 @@ def linear_inference(model, X_test, y_test, row_indices_test):
     Returns
     -------
     dict
-        Dictionary with a single key **linear_inference** mapping to a result dict
-        containing:
-
-        - **test_accuracy** (`float`)
-        - **test_precision** (`float`)
-        - **test_f1** (`float`)
-        - **model**: The provided `model`.
-        - **X_test**: The provided `X_test`.
-        - **y_test**: The provided `y_test`.
-        - **row_indices_test**: The provided `row_indices_test`.
-        - **source_training** (`str`): `"linear_training"`.
+        - **linear_inference** (`dict`): Inference result payload (metrics and
+          attached artifacts for downstream selection/aggregation).
     """
     result = test_inference_classification(model=model, X_test=X_test, y_test=y_test)
     result["model"] = model
@@ -879,14 +870,8 @@ def define_nn_inference_process(
     Returns
     -------
     dict
-        Single-key dictionary whose key is the derived inference name and whose
-        value is a result dict containing:
-
-        - **test_accuracy** (`float`)
-        - **test_precision** (`float`)
-        - **test_f1** (`float`)
-        - **model**, **X_test**, **y_test**, **row_indices_test**
-        - **source_training** (`str`): `train_key`
+        - **nn_inference** (`dict`): Fallback key when `train_key` does not
+          contain `"training"`.
     """
     result = test_inference_classification(model=model, X_test=X_test, y_test=y_test)
     result["model"] = model
@@ -929,14 +914,8 @@ def define_xgb_inference_process(
     Returns
     -------
     dict
-        Single-key dictionary whose key is the derived inference name and whose
-        value is a result dict containing:
-
-        - **test_accuracy** (`float`)
-        - **test_precision** (`float`)
-        - **test_f1** (`float`)
-        - **model**, **X_test**, **y_test**, **row_indices_test**
-        - **source_training** (`str`): `train_key`
+        - **xgb_inference** (`dict`): Fallback key when `train_key` does not
+          contain `"training"`.
     """
     result = test_inference_classification(model=model, X_test=X_test, y_test=y_test)
     result["model"] = model
@@ -964,12 +943,8 @@ def nn_best_selection(nn_inference_a, nn_inference_b):
     Returns
     -------
     dict
-        Dictionary containing key **nn_best_selection** which maps to:
-
-        - **model**: Selected model object (if present).
-        - **X_test**, **y_test**, **row_indices_test**: Selected artifacts (if present).
-        - **f1** (`float`): Best macro F1 score.
-        - **best_key** (`str`): `"nn_training_a"` or `"nn_training_b"`.
+        - **nn_best_selection** (`dict`): Best-selection payload (selected model
+          artifacts and the chosen training branch).
     """
     inf_a = nn_inference_a or {}
     inf_b = nn_inference_b or {}
@@ -1012,12 +987,8 @@ def xgb_best_selection(xgb_inference_a, xgb_inference_b):
     Returns
     -------
     dict
-        Dictionary containing key **xgb_best_selection** which maps to:
-
-        - **model**: Selected model object (if present).
-        - **X_test**, **y_test**, **row_indices_test**: Selected artifacts (if present).
-        - **f1** (`float`): Best macro F1 score.
-        - **best_key** (`str`): `"xgb_training_a"` or `"xgb_training_b"`.
+        - **xgb_best_selection** (`dict`): Best-selection payload (selected model
+          artifacts and the chosen training branch).
     """
     inf_a = xgb_inference_a or {}
     inf_b = xgb_inference_b or {}
@@ -1058,11 +1029,8 @@ def nn_best_inference(nn_best_selection):
     Returns
     -------
     dict
-        Dictionary containing key **nn_best_inference** mapping to:
-
-        - **test_accuracy** (`float`)
-        - **test_precision** (`float`)
-        - **test_f1** (`float`)
+        - **nn_best_inference** (`dict`): Inference metrics payload for the
+          selected NN model.
     """
     sel = nn_best_selection or {}
     result = test_inference_classification(model=sel.get("model"), X_test=sel.get("X_test"), y_test=sel.get("y_test"))
@@ -1083,11 +1051,8 @@ def xgb_best_inference(xgb_best_selection):
     Returns
     -------
     dict
-        Dictionary containing key **xgb_best_inference** mapping to:
-
-        - **test_accuracy** (`float`)
-        - **test_precision** (`float`)
-        - **test_f1** (`float`)
+        - **xgb_best_inference** (`dict`): Inference metrics payload for the
+          selected XGB model.
     """
     sel = xgb_best_selection or {}
     result = test_inference_classification(model=sel.get("model"), X_test=sel.get("X_test"), y_test=sel.get("y_test"))
@@ -1133,11 +1098,7 @@ def ensemble_inference(
     Returns
     -------
     dict
-        Dictionary containing key **ensemble_inference** mapping to:
-
-        - **test_accuracy** (`float`)
-        - **test_precision** (`float`)
-        - **test_f1** (`float`)
+        - **ensemble_inference** (`dict`): Ensemble inference metrics payload.
     """
     xgb_sel = xgb_best_selection or {}
 
