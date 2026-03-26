@@ -20,14 +20,12 @@ reproducibility:
 experiment:
   cache:
     backend:
-      type: local
-    # backend:
-    #   type: gcp
-    #   gcp_project: "<your-gcp-project>"
-    #   credentials_json: "src/firestore.json"
-    # object_store:
-    #   type: gcs
-    #   bucket: "<your-bucket>"
+      type: gcp
+      gcp_project: mlops-platform-470017
+      credentials_json: "src/firestore.json"
+    object_store:
+      type: gcs
+      bucket: mlops-platform123
 
   parameters:
     payload_size_bytes: 256
@@ -114,7 +112,7 @@ experiment:
         environment: "asymmetric-key-env-reporting"
         chart_type: "dynamic"
         probe_paths:
-          rsa_4096_bench: "//*[@name='rsa_4096_bench']"
-          rsa_2048_bench: "//*[@name='rsa_2048_bench']"
-          ed25519_bench: "//*[@name='ed25519_bench']"
+          rsa_4096_bench: "//*[@name='rsa_4096_bench']/*[@name='run_trials']"
+          rsa_2048_bench: "//*[@name='rsa_2048_bench']/*[@name='run_trials']"
+          ed25519_bench: "//*[@name='ed25519_bench']/*[@name='run_trials']"
 
