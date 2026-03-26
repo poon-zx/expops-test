@@ -1,0 +1,95 @@
+metadata:
+  name: "titanic"
+  description: "Titanic binary classification with preprocessing, NN A/B, and logistic baseline + charts"
+  version: "1.0.0"
+
+scripts:
+  main: "src/titanic_model.py"
+  reporting: "src/plot_metrics.py"
+  reporting_js: "src/plot_metrics.js"
+
+environment:
+  titanic-env:
+    venv: ["requirements.txt"]
+  titanic-env-reporting:
+    venv: ["requirements-charts.txt"]
+
+reproducibility:
+  random_seed: 42
+
+data:
+  path: "data/Titanic-Dataset.csv"
+
+experiment:
+  cache:
+    backend:
+      type: local
+    # object_store:
+    #   type: gcs
+    #   bucket: "<your-bucket>"
+
+  parameters:
+    test_size: 0.2
+    random_seed: 42
+
+  pipeline:
+    process_adjlist: |
+      data_preprocessing linear_training
+      data_preprocessing nn_training_a
+      data_preprocessing nn_training_b
+      linear_training linear_inference
+      nn_training_a nn_inference_a
+      nn_training_b nn_inference_b
+      linear_inference metrics_comparison
+      nn_inference_a metrics_comparison
+      nn_inference_b metrics_comparison
+      nn_training_a nn_losses
+      nn_training_b nn_losses
+
+    processes:
+      - name: "data_preprocessing"
+
+      - name: "linear_training"
+        parameters:
+          C: 0.9
+          penalty: "l2"
+          solver: "lbfgs"
+          max_iter: 250
+
+      - name: "nn_training_a"
+        parameters:
+          hidden_layers: [64, 32]
+          learning_rate: 0.01
+          epochs: 50
+          batch_size: 64
+
+      - name: "nn_training_b"
+        parameters:
+          hidden_layers: [128, 64, 32]
+          learning_rate: 0.005
+          epochs: 60
+          batch_size: 64
+
+      - name: "linear_inference"
+
+      - name: "nn_inference_a"
+
+      - name: "nn_inference_b"
+
+      - name: "metrics_comparison"
+        description: "Compare test metrics across linear vs NN A vs NN B"
+        code: "reporting.metrics_comparison"
+        environment: "titanic-env-reporting"
+        probe_paths:
+          linear: "//*[@name='linear_inference']/*[@name='test_inference_binary']"
+          nn_a: "//*[@name='nn_inference_a']/*[@name='test_inference_binary']"
+          nn_b: "//*[@name='nn_inference_b']/*[@name='test_inference_binary']"
+
+      - name: "nn_losses"
+        code: "reporting_js.nn_losses"
+        environment: "titanic-env-reporting"
+        chart_type: "dynamic"
+        probe_paths:
+          nn_training_a: "//*[@name='nn_training_a']/*[@name='train_and_log_nn']"
+          nn_training_b: "//*[@name='nn_training_b']/*[@name='train_and_log_nn']"
+
