@@ -118,7 +118,6 @@ def _encode_features(df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
 
 @process()
 def data_preprocessing(
-    test_size: float = 0.2,
     random_seed: int = 42,
 ) -> Dict[str, Any]:
     """
@@ -133,8 +132,6 @@ def data_preprocessing(
 
     Parameters
     ----------
-    test_size : float, default=0.2
-        Fraction of samples allocated to the test split.
     random_seed : int, default=42
         Seed for the train/test split random state.
 
@@ -147,8 +144,6 @@ def data_preprocessing(
         - **X_test** (`list[list[float]]`): Test feature matrix.
         - **y_train** (`list[int]`): Training labels in `{0, 1}`.
         - **y_test** (`list[int]`): Test labels in `{0, 1}`.
-        - **n_train** (`int`): Number of training samples.
-        - **n_test** (`int`): Number of test samples.
 
     Raises
     ------
@@ -157,6 +152,7 @@ def data_preprocessing(
     ValueError
         If required columns are missing or feature encoding fails.
     """
+    test_size = 0.2
     @step()
     def load_csv() -> SerializableData:
         """
@@ -251,8 +247,6 @@ def data_preprocessing(
             "X_test": X_test.astype(float).tolist(),
             "y_train": y_train.astype(int).tolist(),
             "y_test": y_test.astype(int).tolist(),
-            "n_train": int(X_train.shape[0]),
-            "n_test": int(X_test.shape[0]),
         }
 
     raw = load_csv()
