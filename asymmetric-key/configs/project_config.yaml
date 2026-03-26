@@ -1,0 +1,120 @@
+metadata:
+  name: "asymmetric-key"
+  description: "Asymmetric key operations benchmark: RSA (1024/2048/4096), ECDSA (P-256/P-384), Ed25519 + dynamic and static charts"
+  version: "1.0.0"
+
+scripts:
+  main: "src/asymmetric_key_model.py"
+  reporting: "src/plot_metrics.py"
+  reporting_js: "src/plot_metrics.js"
+
+environment:
+  asymmetric-key-env:
+    venv: ["requirements.txt"]
+  asymmetric-key-env-reporting:
+    venv: ["requirements-charts.txt"]
+
+reproducibility:
+  random_seed: 42
+
+experiment:
+  cache:
+    backend:
+      type: local
+    # backend:
+    #   type: gcp
+    #   gcp_project: "<your-gcp-project>"
+    #   credentials_json: "src/firestore.json"
+    # object_store:
+    #   type: gcs
+    #   bucket: "<your-bucket>"
+
+  parameters:
+    payload_size_bytes: 256
+    rsa_public_exponent: 65537
+
+  pipeline:
+    process_adjlist: |
+      data_generation rsa_1024_bench
+      data_generation rsa_2048_bench
+      data_generation rsa_4096_bench
+      data_generation ecdsa_p256_bench
+      data_generation ecdsa_p384_bench
+      data_generation ed25519_bench
+      rsa_1024_bench asymmetric_summary_chart
+      rsa_2048_bench asymmetric_summary_chart
+      rsa_4096_bench asymmetric_summary_chart
+      ecdsa_p256_bench asymmetric_summary_chart
+      ecdsa_p384_bench asymmetric_summary_chart
+      ed25519_bench asymmetric_summary_chart
+      rsa_4096_bench keygen_live
+      rsa_2048_bench keygen_live
+      ed25519_bench keygen_live
+
+    processes:
+      - name: "data_generation"
+        code: "data_generation"
+        parameters:
+          payload_size_bytes: 256
+          random_seed: 42
+
+      - name: "rsa_1024_bench"
+        code: "define_rsa_bench"
+        parameters:
+          key_size: 1024
+          num_trials: 60
+          public_exponent: 65537
+
+      - name: "rsa_2048_bench"
+        code: "define_rsa_bench"
+        parameters:
+          key_size: 2048
+          num_trials: 80
+          public_exponent: 65537
+
+      - name: "rsa_4096_bench"
+        code: "define_rsa_bench"
+        parameters:
+          key_size: 4096
+          num_trials: 60
+          public_exponent: 65537
+
+      - name: "ecdsa_p256_bench"
+        code: "define_ecdsa_bench"
+        parameters:
+          curve: "secp256r1"
+          num_trials: 200
+          hash_name: "sha256"
+
+      - name: "ecdsa_p384_bench"
+        code: "define_ecdsa_bench"
+        parameters:
+          curve: "secp384r1"
+          num_trials: 160
+          hash_name: "sha384"
+
+      - name: "ed25519_bench"
+        code: "define_ed25519_bench"
+        parameters:
+          num_trials: 400
+
+      - name: "asymmetric_summary_chart"
+        code: "reporting.asymmetric_summary_chart"
+        environment: "asymmetric-key-env-reporting"
+        probe_paths:
+          rsa_1024: "//*[@name='rsa_1024_bench']/*[@name='run_trials']"
+          rsa_2048: "//*[@name='rsa_2048_bench']/*[@name='run_trials']"
+          rsa_4096: "//*[@name='rsa_4096_bench']/*[@name='run_trials']"
+          ecdsa_p256: "//*[@name='ecdsa_p256_bench']/*[@name='run_trials']"
+          ecdsa_p384: "//*[@name='ecdsa_p384_bench']/*[@name='run_trials']"
+          ed25519: "//*[@name='ed25519_bench']/*[@name='run_trials']"
+
+      - name: "keygen_live"
+        code: "reporting_js.keygen_live"
+        environment: "asymmetric-key-env-reporting"
+        chart_type: "dynamic"
+        probe_paths:
+          rsa_4096_bench: "//*[@name='rsa_4096_bench']"
+          rsa_2048_bench: "//*[@name='rsa_2048_bench']"
+          ed25519_bench: "//*[@name='ed25519_bench']"
+
