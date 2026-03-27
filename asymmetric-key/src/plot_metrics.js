@@ -60,19 +60,20 @@ chart('keygen_live', (probePaths, ctx, listener) => {
     })
   };
 
-  const normalizeSeriesToPercent = (series, points = 101) => {
+  const normalizeSeriesToPercent = (series, targetTrials, points = 101) => {
     const values = Array.isArray(series) ? series.filter((v) => Number.isFinite(v)) : [];
     const n = values.length;
-    if (n === 0) return [];
-    if (n === 1) return Array(points).fill(values[0]);
-    const out = [];
-    for (let i = 0; i < points; i += 1) {
-      const t = i / (points - 1);
-      const pos = t * (n - 1);
-      const lo = Math.floor(pos);
-      const hi = Math.min(n - 1, lo + 1);
-      const w = pos - lo;
-      out.push(values[lo] * (1 - w) + values[hi] * w);
+    if (n === 0) return new Array(points).fill(null);
+    const total = targetTrials && targetTrials > 0 ? targetTrials : n;
+    const out = new Array(points).fill(null);
+    for (let i = 0; i < n; i += 1) {
+      const pct = (i / (total - 1)) * (points - 1);
+      const bucket = Math.round(pct);
+      if (bucket < points) out[bucket] = values[i];
+    }
+    // forward-fill gaps between mapped points
+    for (let i = 1; i < points; i += 1) {
+      if (out[i] === null && out[i - 1] !== null) out[i] = out[i - 1];
     }
     return out;
   };
@@ -161,7 +162,7 @@ chart('keygen_live', (probePaths, ctx, listener) => {
       const m = (allMetrics || {})[probeKey] || {};
       const series = ctx.toSeries((m.keygen_ms || {}));
       const targetTrials = Number(m.num_trials || m.target_trials || 0) || null;
-      const normalized = normalizeSeriesToPercent(series, 101);
+      const normalized = normalizeSeriesToPercent(series, targetTrials, 101);
       const stats = rollingStats(normalized, 10);
       dataset.data = stats.med;
       dataset._bandData = { lower: stats.p10, upper: stats.p90 };
