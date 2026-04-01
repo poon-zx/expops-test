@@ -42,6 +42,8 @@ experiment:
       data_generation_p4 rsa_2048_p4
       rsa_1024_p2 asymmetric_summary_chart
       rsa_2048_p2 asymmetric_summary_chart
+      rsa_1024_p2 rsa_p2_timing_comparison
+      rsa_2048_p2 rsa_p2_timing_comparison
       rsa_1024_p3 asymmetric_summary_chart
       rsa_2048_p3 asymmetric_summary_chart
       rsa_1024_p4 asymmetric_summary_chart
@@ -112,3 +114,11 @@ experiment:
           rsa_2048_p3: "//*[@name='rsa_2048_p3']/*[@name='run_trials']"
           rsa_1024_p4: "//*[@name='rsa_1024_p4']/*[@name='run_trials']"
           rsa_2048_p4: "//*[@name='rsa_2048_p4']/*[@name='run_trials']"
+
+      - name: "rsa_p2_timing_comparison"
+        code: "reporting_js.rsa_p2_timing_comparison"
+        environment: "asymmetric-key-env-reporting"
+        chart_type: "dynamic"
+        probe_paths:
+          rsa_1024_p2: "//*[@name='rsa_1024_p2']/*[@name='run_trials']"
+          rsa_2048_p2: "//*[@name='rsa_2048_p2']/*[@name='run_trials']"

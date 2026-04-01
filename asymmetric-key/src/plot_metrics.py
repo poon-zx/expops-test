@@ -112,7 +112,7 @@ def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
                 ha="center",
                 va="bottom",
                 fontsize=8,
-                rotation=90,
+                rotation=0,
             )
 
     fig.tight_layout()
