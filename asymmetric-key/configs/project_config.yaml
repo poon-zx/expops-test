@@ -27,11 +27,6 @@ experiment:
       type: gcs
       bucket: mlops-platform123
 
-  parameters:
-    rsa_key_sizes_bits: [1024, 2048]
-    payload_sizes_bytes: [2, 3, 4]
-    num_trials_per_cell: 10
-
   pipeline:
     process_adjlist: |
       data_generation_p2 rsa_1024_p2
@@ -49,60 +44,54 @@ experiment:
       rsa_1024_p4 asymmetric_summary_chart
       rsa_2048_p4 asymmetric_summary_chart
 
+    parameters:
+      num_trials: 100
+
     processes:
       - name: "data_generation_p2"
         code: "data_generation"
         parameters:
           payload_size_bytes: 2
-          random_seed: 42
 
       - name: "data_generation_p3"
         code: "data_generation"
         parameters:
           payload_size_bytes: 3
-          random_seed: 42
 
       - name: "data_generation_p4"
         code: "data_generation"
         parameters:
           payload_size_bytes: 4
-          random_seed: 42
 
       - name: "rsa_1024_p2"
         code: "define_rsa_bench"
         parameters:
           key_size: 1024
-          num_trials: 10
 
       - name: "rsa_2048_p2"
         code: "define_rsa_bench"
         parameters:
           key_size: 2048
-          num_trials: 10
 
       - name: "rsa_1024_p3"
         code: "define_rsa_bench"
         parameters:
           key_size: 1024
-          num_trials: 10
 
       - name: "rsa_2048_p3"
         code: "define_rsa_bench"
         parameters:
           key_size: 2048
-          num_trials: 10
 
       - name: "rsa_1024_p4"
         code: "define_rsa_bench"
         parameters:
           key_size: 1024
-          num_trials: 10
 
       - name: "rsa_2048_p4"
         code: "define_rsa_bench"
         parameters:
           key_size: 2048
-          num_trials: 10
 
       - name: "asymmetric_summary_chart"
         code: "reporting.asymmetric_summary_chart"
