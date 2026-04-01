@@ -1,6 +1,6 @@
 metadata:
   name: "asymmetric-key"
-  description: "RSA encryption/decryption benchmark (Boicea et al.–style): matrix — key sizes 1024/2048 bits × payload 2/3/4 bytes, OAEP-SHA256, 10 trials per cell; logs mean_encrypt_ms and mean_decrypt_ms. (This runtime enforces RSA key_size ≥ 1024.)"
+  description: "RSA encryption/decryption benchmark: matrix — key sizes 1024/2048 bits × payload 2/3/4 bytes, OAEP-SHA256, 10 trials per cell; logs mean_encrypt_ms and mean_decrypt_ms. (This runtime enforces RSA key_size ≥ 1024.)"
   version: "1.0.0"
 
 scripts:

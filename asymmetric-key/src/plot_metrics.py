@@ -87,8 +87,8 @@ def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
     width = 0.38
 
     fig, ax = plt.subplots(figsize=(9.5, 3.8))
-    ax.bar(x - width / 2.0, encrypt_ms, width=width, label="Encrypt")
-    ax.bar(x + width / 2.0, decrypt_ms, width=width, label="Decrypt")
+    encrypt_bars = ax.bar(x - width / 2.0, encrypt_ms, width=width, label="Encrypt")
+    decrypt_bars = ax.bar(x + width / 2.0, decrypt_ms, width=width, label="Decrypt")
 
     ax.set_xticks(x, labels=labels, rotation=20, ha="right")
     ax.set_ylabel("Mean time (ms)")
@@ -98,6 +98,22 @@ def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
     ymax = float(np.nanmax(np.concatenate([encrypt_ms, decrypt_ms])))
     if np.isfinite(ymax) and ymax > 0:
         ax.set_ylim(0.0, ymax * 1.18)
+        label_offset = ymax * 0.015
+    else:
+        label_offset = 0.0
+
+    for bars in (encrypt_bars, decrypt_bars):
+        for bar in bars:
+            h = float(bar.get_height())
+            ax.text(
+                bar.get_x() + (bar.get_width() / 2.0),
+                h + label_offset,
+                f"{h:.3f}",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+                rotation=90,
+            )
 
     fig.tight_layout()
     plt.savefig("asymmetric_summary_chart.png", dpi=160)
