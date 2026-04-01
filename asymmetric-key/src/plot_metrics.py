@@ -51,12 +51,13 @@ def _parse_rsa_cell_label(label: str) -> Optional[Tuple[int, int]]:
 @chart()
 def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
     """
-    Heatmap of mean RSA encryption time (ms): rows = key size (1024, 2048),
-    columns = payload bytes (2, 3, 4). Expects each bench to log mean_encrypt_ms.
+    Grouped bar chart of mean RSA encrypt vs decrypt time (ms) per process.
+
+    Expects each RSA bench process (e.g. rsa_1024_p2) to log:
+    - mean_encrypt_ms
+    - mean_decrypt_ms
     """
-    key_sizes = (1024, 2048)
-    payload_sizes = (2, 3, 4)
-    grid: Dict[Tuple[int, int], float] = {}
+    rsa_rows: list[Tuple[Tuple[int, int], str, float, float]] = []
 
     for k, m in (metrics or {}).items():
         if not isinstance(m, dict):
@@ -67,48 +68,36 @@ def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
         parsed = _parse_rsa_cell_label(label)
         if parsed is None:
             continue
-        ks, ps = parsed
-        if ks not in key_sizes or ps not in payload_sizes:
-            continue
-        v = _get_float(m.get("mean_encrypt_ms"))
-        if v is None:
-            continue
-        grid[(ks, ps)] = float(v)
 
-    if not grid:
+        enc = _get_float(m.get("mean_encrypt_ms"))
+        dec = _get_float(m.get("mean_decrypt_ms"))
+        if enc is None or dec is None:
+            continue
+        rsa_rows.append((parsed, label, float(enc), float(dec)))
+
+    if not rsa_rows:
         return
 
-    mat = np.full((len(key_sizes), len(payload_sizes)), np.nan, dtype=float)
-    for i, ks in enumerate(key_sizes):
-        for j, ps in enumerate(payload_sizes):
-            mat[i, j] = grid.get((ks, ps), np.nan)
+    rsa_rows.sort(key=lambda t: (t[0][0], t[0][1]))  # (key_size, payload)
+    labels = [t[1] for t in rsa_rows]
+    encrypt_ms = np.asarray([t[2] for t in rsa_rows], dtype=float)
+    decrypt_ms = np.asarray([t[3] for t in rsa_rows], dtype=float)
 
-    fig, ax = plt.subplots(figsize=(7.5, 3.6))
-    im = ax.imshow(mat, aspect="auto", cmap="viridis")
+    x = np.arange(len(labels), dtype=float)
+    width = 0.38
 
-    ax.set_xticks(np.arange(len(payload_sizes)), labels=[f"{p} B" for p in payload_sizes])
-    ax.set_yticks(np.arange(len(key_sizes)), labels=[f"{ks} bit" for ks in key_sizes])
-    ax.set_xlabel("Payload size")
-    ax.set_ylabel("RSA key size")
-    ax.set_title("Mean RSA encrypt time (OAEP-SHA256, ms)\nNote: this runtime enforces RSA key_size ≥ 1024")
+    fig, ax = plt.subplots(figsize=(9.5, 3.8))
+    ax.bar(x - width / 2.0, encrypt_ms, width=width, label="Encrypt")
+    ax.bar(x + width / 2.0, decrypt_ms, width=width, label="Decrypt")
 
-    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("mean_encrypt_ms")
+    ax.set_xticks(x, labels=labels, rotation=20, ha="right")
+    ax.set_ylabel("Mean time (ms)")
+    ax.set_title("Mean RSA encrypt vs decrypt time (OAEP-SHA256, ms)\nNote: this runtime enforces RSA key_size ≥ 1024")
+    ax.legend(loc="best")
 
-    for i in range(len(key_sizes)):
-        for j in range(len(payload_sizes)):
-            val = mat[i, j]
-            if not np.isfinite(val):
-                continue
-            ax.text(
-                j,
-                i,
-                f"{val:.3f}",
-                ha="center",
-                va="center",
-                color="white" if val >= np.nanmax(mat) * 0.5 else "black",
-                fontsize=9,
-            )
+    ymax = float(np.nanmax(np.concatenate([encrypt_ms, decrypt_ms])))
+    if np.isfinite(ymax) and ymax > 0:
+        ax.set_ylim(0.0, ymax * 1.18)
 
     fig.tight_layout()
     plt.savefig("asymmetric_summary_chart.png", dpi=160)

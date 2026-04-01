@@ -118,10 +118,10 @@ def define_rsa_bench(
     num_trials: int = 10,
 ) -> Dict[str, Any]:
     """
-    Benchmark mean RSA encryption latency (OAEP + SHA-256), paper-style.
+    Benchmark mean RSA encryption and decryption latency (OAEP + SHA-256), paper-style.
 
     For each trial, generates a fresh RSA key pair (not timed), encrypts the payload
-    with the public key (timed), then decrypts to verify correctness (not timed).
+    with the public key (timed), then decrypts to verify correctness (timed).
 
     Parameters
     ----------
@@ -144,6 +144,7 @@ def define_rsa_bench(
         - **payload_bytes** (`int`): Plaintext length in bytes.
         - **num_trials** (`int`): Number of executed trials.
         - **mean_encrypt_ms** (`float`): Mean encryption latency in milliseconds.
+        - **mean_decrypt_ms** (`float`): Mean decryption latency in milliseconds.
 
     Raises
     ------
@@ -157,7 +158,7 @@ def define_rsa_bench(
     @step()
     def run_trials() -> Dict[str, Any]:
         """
-        Execute RSA encryption benchmark trials and log mean_encrypt_ms.
+        Execute RSA encryption/decryption benchmark trials and log mean latencies.
 
         Returns
         -------
@@ -170,6 +171,7 @@ def define_rsa_bench(
             If decryption does not recover the plaintext.
         """
         encrypt_ms: list[float] = []
+        decrypt_ms: list[float] = []
 
         for _ in range(num_trials_i):
             priv = rsa.generate_private_key(public_exponent=65537, key_size=key_size_i)
@@ -179,18 +181,23 @@ def define_rsa_bench(
             ct = pub.encrypt(payload, _OAEP_PADDING)
             encrypt_ms.append((time.perf_counter() - t1) * 1000.0)
 
+            t2 = time.perf_counter()
             pt = priv.decrypt(ct, _OAEP_PADDING)
+            decrypt_ms.append((time.perf_counter() - t2) * 1000.0)
             if pt != payload:
                 raise ValueError("RSA OAEP decryption did not recover plaintext")
 
         mean_enc = _mean_ms(encrypt_ms)
+        mean_dec = _mean_ms(decrypt_ms)
         log_metric("mean_encrypt_ms", float(mean_enc))
+        log_metric("mean_decrypt_ms", float(mean_dec))
         return {
             "algorithm": "RSA",
             "key_size": key_size_i,
             "payload_bytes": len(payload),
             "num_trials": num_trials_i,
             "mean_encrypt_ms": mean_enc,
+            "mean_decrypt_ms": mean_dec,
         }
 
     return run_trials()
