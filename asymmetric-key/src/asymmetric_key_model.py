@@ -4,7 +4,7 @@ import base64
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import numpy as np
 
@@ -32,19 +32,20 @@ def _mean_ms(values: list[float]) -> float:
 
 @process()
 def data_generation(
-    payload_size_bytes: int = 256,
+    payload_size_bytes: int = 2,
     random_seed: int = 42,
 ) -> Dict[str, Any]:
     """
-    Generate a deterministic payload for signing/verifying benchmarks.
+    Generate a deterministic payload for RSA encryption benchmarks.
 
-    The generated payload is deterministic for a given `random_seed` and
-    `payload_size_bytes` to make algorithm comparisons repeatable.
+    ``payload_size_bytes`` is normally set from ``configs/project_config.yaml`` (e.g. the
+    paper-style 2 / 3 / 4 byte matrix). The payload is deterministic for a given
+    ``random_seed`` and size.
 
     Parameters
     ----------
-    payload_size_bytes : int, default=256
-        Size of the generated message payload in bytes.
+    payload_size_bytes : int, default=2
+        Size of the generated payload in bytes.
     random_seed : int, default=42
         Seed used by the NumPy RNG to generate the payload bytes.
 
@@ -58,13 +59,13 @@ def data_generation(
     """
 
     @step()
-    def generate_payload(payload_size_bytes: int = 256, random_seed: int = 42) -> Dict[str, Any]:
+    def generate_payload(payload_size_bytes: int = 2, random_seed: int = 42) -> Dict[str, Any]:
         """
         Generate base64-encoded random bytes.
 
         Parameters
         ----------
-        payload_size_bytes : int, default=256
+        payload_size_bytes : int, default=2
             Size of the generated payload in bytes.
         random_seed : int, default=42
             Seed used by the NumPy RNG to generate the payload bytes.
@@ -77,11 +78,10 @@ def data_generation(
             - **payload_b64** (`str`): Base64-encoded payload bytes.
             - **payload_bytes** (`int`): Payload size in bytes.
         """
+        ps_inner = int(payload_size_bytes)
         rng = np.random.default_rng(int(random_seed))
-        payload = rng.integers(0, 256, size=int(payload_size_bytes), dtype=np.uint8).tobytes()
-        # Intentionally keep output key as `payload_bytes` for downstream compatibility,
-        # but avoid using that name for injected parameters to prevent collisions.
-        return {"payload_b64": _b64_encode(payload), "payload_bytes": int(payload_size_bytes)}
+        payload = rng.integers(0, 256, size=ps_inner, dtype=np.uint8).tobytes()
+        return {"payload_b64": _b64_encode(payload), "payload_bytes": ps_inner}
 
     return generate_payload(payload_size_bytes=payload_size_bytes, random_seed=random_seed)
 
@@ -104,123 +104,93 @@ def _log_means(result: _BenchResult) -> None:
     log_metric("mean_verify_ms", float(result.mean_verify_ms))
 
 
+_OAEP_PADDING = padding.OAEP(
+    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+    algorithm=hashes.SHA256(),
+    label=None,
+)
+
+
 @process()
 def define_rsa_bench(
     payload_b64: str,
     key_size: int = 2048,
-    num_trials: int = 50,
-    public_exponent: int = 65537,
+    num_trials: int = 10,
 ) -> Dict[str, Any]:
     """
-    Benchmark RSA key generation, signing, and verification latency.
+    Benchmark mean RSA encryption latency (OAEP + SHA-256), paper-style.
 
-    For each trial, this process:
-    - Generates a fresh RSA private key.
-    - Signs the provided payload with RSA-PSS + SHA-256.
-    - Verifies the signature with the corresponding public key.
-    - Logs per-trial latencies and mean latencies (in milliseconds).
+    For each trial, generates a fresh RSA key pair (not timed), encrypts the payload
+    with the public key (timed), then decrypts to verify correctness (not timed).
 
     Parameters
     ----------
     payload_b64 : str
-        Base64-encoded payload bytes to sign and verify.
+        Base64-encoded plaintext bytes to encrypt.
     key_size : int, default=2048
-        RSA key size in bits.
-    num_trials : int, default=50
-        Number of benchmark trials to run.
-    public_exponent : int, default=65537
-        RSA public exponent used during key generation.
+        RSA modulus size in bits (set from ``configs/project_config.yaml`` for this demo).
+        OAEP-SHA256 needs a large enough modulus for the plaintext; very small keys can fail
+        at encrypt time.
+    num_trials : int, default=10
+        Number of benchmark trials.
 
     Returns
     -------
     dict
         Dictionary containing:
 
-        - **algorithm** (`str`): Always `"RSA"`.
+        - **algorithm** (`str`): Always ``"RSA"``.
         - **key_size** (`int`): Key size in bits.
+        - **payload_bytes** (`int`): Plaintext length in bytes.
         - **num_trials** (`int`): Number of executed trials.
-        - **mean_keygen_ms** (`float`): Mean key-generation latency in milliseconds.
-        - **mean_sign_ms** (`float`): Mean signing latency in milliseconds.
-        - **mean_verify_ms** (`float`): Mean verification latency in milliseconds.
+        - **mean_encrypt_ms** (`float`): Mean encryption latency in milliseconds.
 
     Raises
     ------
     ValueError
-        If signature verification fails for any trial.
+        If decryption does not recover the plaintext.
     """
     payload = _b64_decode(str(payload_b64))
-    key_size = int(key_size)
-    num_trials = int(num_trials)
-    public_exponent = int(public_exponent)
+    key_size_i = int(key_size)
+    num_trials_i = int(num_trials)
 
     @step()
     def run_trials() -> Dict[str, Any]:
         """
-        Execute RSA benchmark trials and log metrics.
+        Execute RSA encryption benchmark trials and log mean_encrypt_ms.
 
         Returns
         -------
         dict
-            Benchmark summary payload (see `define_rsa_bench`).
+            Benchmark summary payload (see ``define_rsa_bench``).
 
         Raises
         ------
         ValueError
-            If signature verification fails for any trial.
+            If decryption does not recover the plaintext.
         """
-        keygen_ms: list[float] = []
-        sign_ms: list[float] = []
-        verify_ms: list[float] = []
+        encrypt_ms: list[float] = []
 
-        for _ in range(num_trials):
-            t0 = time.perf_counter()
-            priv = rsa.generate_private_key(public_exponent=public_exponent, key_size=key_size)
-            keygen_ms.append((time.perf_counter() - t0) * 1000.0)
-
-            msg = payload
+        for _ in range(num_trials_i):
+            priv = rsa.generate_private_key(public_exponent=65537, key_size=key_size_i)
+            pub = priv.public_key()
 
             t1 = time.perf_counter()
-            sig = priv.sign(
-                msg,
-                padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-                hashes.SHA256(),
-            )
-            sign_ms.append((time.perf_counter() - t1) * 1000.0)
+            ct = pub.encrypt(payload, _OAEP_PADDING)
+            encrypt_ms.append((time.perf_counter() - t1) * 1000.0)
 
-            pub = priv.public_key()
-            t2 = time.perf_counter()
-            try:
-                pub.verify(
-                    sig,
-                    msg,
-                    padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
-                    hashes.SHA256(),
-                )
-                ok = True
-            except Exception:
-                ok = False
-            verify_ms.append((time.perf_counter() - t2) * 1000.0)
+            pt = priv.decrypt(ct, _OAEP_PADDING)
+            if pt != payload:
+                raise ValueError("RSA OAEP decryption did not recover plaintext")
 
-            if not ok:
-                raise ValueError("RSA signature verification failed")
-
-        _log_trial_series("keygen_ms", keygen_ms)
-        _log_trial_series("sign_ms", sign_ms)
-        _log_trial_series("verify_ms", verify_ms)
-
-        result = _BenchResult(
-            mean_keygen_ms=_mean_ms(keygen_ms),
-            mean_sign_ms=_mean_ms(sign_ms),
-            mean_verify_ms=_mean_ms(verify_ms),
-        )
-        _log_means(result)
+        mean_enc = _mean_ms(encrypt_ms)
+        log_metric("mean_encrypt_ms", float(mean_enc))
         return {
             "algorithm": "RSA",
-            "key_size": key_size,
-            "num_trials": num_trials,
-            "mean_keygen_ms": result.mean_keygen_ms,
-            "mean_sign_ms": result.mean_sign_ms,
-            "mean_verify_ms": result.mean_verify_ms,
+            "key_size": key_size_i,
+            "payload_bytes": len(payload),
+            "num_trials": num_trials_i,
+            "mean_encrypt_ms": mean_enc,
         }
 
     return run_trials()

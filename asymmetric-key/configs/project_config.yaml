@@ -1,6 +1,6 @@
 metadata:
   name: "asymmetric-key"
-  description: "Asymmetric key operations benchmark: RSA (1024/2048/4096), ECDSA (P-256/P-384), Ed25519 + dynamic and static charts"
+  description: "RSA encryption benchmark (Boicea et al.–style): 3×3 matrix — key sizes 768/1024/2048 bits × payload 2/3/4 bytes, OAEP-SHA256, 10 trials per cell; mean_encrypt_ms only. Smallest key is 768 bits (512-bit RSA cannot use OAEP-SHA256 per PKCS#1)."
   version: "1.0.0"
 
 scripts:
@@ -28,91 +28,114 @@ experiment:
       bucket: mlops-platform123
 
   parameters:
-    payload_size_bytes: 256
-    rsa_public_exponent: 65537
+    rsa_key_sizes_bits: [768, 1024, 2048]
+    payload_sizes_bytes: [2, 3, 4]
+    num_trials_per_cell: 10
 
   pipeline:
     process_adjlist: |
-      data_generation rsa_1024_bench
-      data_generation rsa_2048_bench
-      data_generation rsa_4096_bench
-      data_generation ecdsa_p256_bench
-      data_generation ecdsa_p384_bench
-      data_generation ed25519_bench
-      rsa_1024_bench asymmetric_summary_chart
-      rsa_2048_bench asymmetric_summary_chart
-      rsa_4096_bench asymmetric_summary_chart
-      ecdsa_p256_bench asymmetric_summary_chart
-      ecdsa_p384_bench asymmetric_summary_chart
-      ed25519_bench asymmetric_summary_chart
-      rsa_4096_bench keygen_live
-      rsa_2048_bench keygen_live
-      ed25519_bench keygen_live
+      data_generation_p2 rsa_768_p2
+      data_generation_p2 rsa_1024_p2
+      data_generation_p2 rsa_2048_p2
+      data_generation_p3 rsa_768_p3
+      data_generation_p3 rsa_1024_p3
+      data_generation_p3 rsa_2048_p3
+      data_generation_p4 rsa_768_p4
+      data_generation_p4 rsa_1024_p4
+      data_generation_p4 rsa_2048_p4
+      rsa_768_p2 asymmetric_summary_chart
+      rsa_1024_p2 asymmetric_summary_chart
+      rsa_2048_p2 asymmetric_summary_chart
+      rsa_768_p3 asymmetric_summary_chart
+      rsa_1024_p3 asymmetric_summary_chart
+      rsa_2048_p3 asymmetric_summary_chart
+      rsa_768_p4 asymmetric_summary_chart
+      rsa_1024_p4 asymmetric_summary_chart
+      rsa_2048_p4 asymmetric_summary_chart
 
     processes:
-      - name: "data_generation"
+      - name: "data_generation_p2"
         code: "data_generation"
         parameters:
-          payload_size_bytes: 256
+          payload_size_bytes: 2
           random_seed: 42
 
-      - name: "rsa_1024_bench"
+      - name: "data_generation_p3"
+        code: "data_generation"
+        parameters:
+          payload_size_bytes: 3
+          random_seed: 42
+
+      - name: "data_generation_p4"
+        code: "data_generation"
+        parameters:
+          payload_size_bytes: 4
+          random_seed: 42
+
+      - name: "rsa_768_p2"
+        code: "define_rsa_bench"
+        parameters:
+          key_size: 768
+          num_trials: 10
+
+      - name: "rsa_1024_p2"
         code: "define_rsa_bench"
         parameters:
           key_size: 1024
-          num_trials: 60
-          public_exponent: 65537
+          num_trials: 10
 
-      - name: "rsa_2048_bench"
+      - name: "rsa_2048_p2"
         code: "define_rsa_bench"
         parameters:
           key_size: 2048
-          num_trials: 80
-          public_exponent: 65537
+          num_trials: 10
 
-      - name: "rsa_4096_bench"
+      - name: "rsa_768_p3"
         code: "define_rsa_bench"
         parameters:
-          key_size: 4096
-          num_trials: 60
-          public_exponent: 65537
+          key_size: 768
+          num_trials: 10
 
-      - name: "ecdsa_p256_bench"
-        code: "define_ecdsa_bench"
+      - name: "rsa_1024_p3"
+        code: "define_rsa_bench"
         parameters:
-          curve: "secp256r1"
-          num_trials: 200
-          hash_name: "sha256"
+          key_size: 1024
+          num_trials: 10
 
-      - name: "ecdsa_p384_bench"
-        code: "define_ecdsa_bench"
+      - name: "rsa_2048_p3"
+        code: "define_rsa_bench"
         parameters:
-          curve: "secp384r1"
-          num_trials: 160
-          hash_name: "sha384"
+          key_size: 2048
+          num_trials: 10
 
-      - name: "ed25519_bench"
-        code: "define_ed25519_bench"
+      - name: "rsa_768_p4"
+        code: "define_rsa_bench"
         parameters:
-          num_trials: 400
+          key_size: 768
+          num_trials: 10
+
+      - name: "rsa_1024_p4"
+        code: "define_rsa_bench"
+        parameters:
+          key_size: 1024
+          num_trials: 10
+
+      - name: "rsa_2048_p4"
+        code: "define_rsa_bench"
+        parameters:
+          key_size: 2048
+          num_trials: 10
 
       - name: "asymmetric_summary_chart"
         code: "reporting.asymmetric_summary_chart"
         environment: "asymmetric-key-env-reporting"
         probe_paths:
-          rsa_1024: "//*[@name='rsa_1024_bench']/*[@name='run_trials']"
-          rsa_2048: "//*[@name='rsa_2048_bench']/*[@name='run_trials']"
-          rsa_4096: "//*[@name='rsa_4096_bench']/*[@name='run_trials']"
-          ecdsa_p256: "//*[@name='ecdsa_p256_bench']/*[@name='run_trials']"
-          ecdsa_p384: "//*[@name='ecdsa_p384_bench']/*[@name='run_trials']"
-          ed25519: "//*[@name='ed25519_bench']/*[@name='run_trials']"
-
-      - name: "keygen_live"
-        code: "reporting_js.keygen_live"
-        environment: "asymmetric-key-env-reporting"
-        chart_type: "dynamic"
-        probe_paths:
-          rsa_4096_bench: "//*[@name='rsa_4096_bench']/*[@name='run_trials']"
-          rsa_2048_bench: "//*[@name='rsa_2048_bench']/*[@name='run_trials']"
-          ed25519_bench: "//*[@name='ed25519_bench']/*[@name='run_trials']"
-
+          rsa_768_p2: "//*[@name='rsa_768_p2']/*[@name='run_trials']"
+          rsa_1024_p2: "//*[@name='rsa_1024_p2']/*[@name='run_trials']"
+          rsa_2048_p2: "//*[@name='rsa_2048_p2']/*[@name='run_trials']"
+          rsa_768_p3: "//*[@name='rsa_768_p3']/*[@name='run_trials']"
+          rsa_1024_p3: "//*[@name='rsa_1024_p3']/*[@name='run_trials']"
+          rsa_2048_p3: "//*[@name='rsa_2048_p3']/*[@name='run_trials']"
+          rsa_768_p4: "//*[@name='rsa_768_p4']/*[@name='run_trials']"
+          rsa_1024_p4: "//*[@name='rsa_1024_p4']/*[@name='run_trials']"
+          rsa_2048_p4: "//*[@name='rsa_2048_p4']/*[@name='run_trials']"
