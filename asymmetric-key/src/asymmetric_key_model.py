@@ -129,8 +129,8 @@ def define_rsa_bench(
         Base64-encoded plaintext bytes to encrypt.
     key_size : int, default=2048
         RSA modulus size in bits (set from ``configs/project_config.yaml`` for this demo).
-        OAEP-SHA256 needs a large enough modulus for the plaintext; very small keys can fail
-        at encrypt time.
+        OAEP-SHA256 needs a large enough modulus for the plaintext; additionally, the
+        `cryptography` backend used here enforces RSA key_size ≥ 1024.
     num_trials : int, default=10
         Number of benchmark trials.
 

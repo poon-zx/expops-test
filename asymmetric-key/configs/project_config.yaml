@@ -1,6 +1,6 @@
 metadata:
   name: "asymmetric-key"
-  description: "RSA encryption benchmark (Boicea et al.–style): 3×3 matrix — key sizes 768/1024/2048 bits × payload 2/3/4 bytes, OAEP-SHA256, 10 trials per cell; mean_encrypt_ms only. Smallest key is 768 bits (512-bit RSA cannot use OAEP-SHA256 per PKCS#1)."
+  description: "RSA encryption benchmark (Boicea et al.–style): matrix — key sizes 1024/2048 bits × payload 2/3/4 bytes, OAEP-SHA256, 10 trials per cell; mean_encrypt_ms only. (This runtime enforces RSA key_size ≥ 1024.)"
   version: "1.0.0"
 
 scripts:
@@ -28,28 +28,22 @@ experiment:
       bucket: mlops-platform123
 
   parameters:
-    rsa_key_sizes_bits: [768, 1024, 2048]
+    rsa_key_sizes_bits: [1024, 2048]
     payload_sizes_bytes: [2, 3, 4]
     num_trials_per_cell: 10
 
   pipeline:
     process_adjlist: |
-      data_generation_p2 rsa_768_p2
       data_generation_p2 rsa_1024_p2
       data_generation_p2 rsa_2048_p2
-      data_generation_p3 rsa_768_p3
       data_generation_p3 rsa_1024_p3
       data_generation_p3 rsa_2048_p3
-      data_generation_p4 rsa_768_p4
       data_generation_p4 rsa_1024_p4
       data_generation_p4 rsa_2048_p4
-      rsa_768_p2 asymmetric_summary_chart
       rsa_1024_p2 asymmetric_summary_chart
       rsa_2048_p2 asymmetric_summary_chart
-      rsa_768_p3 asymmetric_summary_chart
       rsa_1024_p3 asymmetric_summary_chart
       rsa_2048_p3 asymmetric_summary_chart
-      rsa_768_p4 asymmetric_summary_chart
       rsa_1024_p4 asymmetric_summary_chart
       rsa_2048_p4 asymmetric_summary_chart
 
@@ -72,12 +66,6 @@ experiment:
           payload_size_bytes: 4
           random_seed: 42
 
-      - name: "rsa_768_p2"
-        code: "define_rsa_bench"
-        parameters:
-          key_size: 768
-          num_trials: 10
-
       - name: "rsa_1024_p2"
         code: "define_rsa_bench"
         parameters:
@@ -90,12 +78,6 @@ experiment:
           key_size: 2048
           num_trials: 10
 
-      - name: "rsa_768_p3"
-        code: "define_rsa_bench"
-        parameters:
-          key_size: 768
-          num_trials: 10
-
       - name: "rsa_1024_p3"
         code: "define_rsa_bench"
         parameters:
@@ -106,12 +88,6 @@ experiment:
         code: "define_rsa_bench"
         parameters:
           key_size: 2048
-          num_trials: 10
-
-      - name: "rsa_768_p4"
-        code: "define_rsa_bench"
-        parameters:
-          key_size: 768
           num_trials: 10
 
       - name: "rsa_1024_p4"
@@ -130,12 +106,9 @@ experiment:
         code: "reporting.asymmetric_summary_chart"
         environment: "asymmetric-key-env-reporting"
         probe_paths:
-          rsa_768_p2: "//*[@name='rsa_768_p2']/*[@name='run_trials']"
           rsa_1024_p2: "//*[@name='rsa_1024_p2']/*[@name='run_trials']"
           rsa_2048_p2: "//*[@name='rsa_2048_p2']/*[@name='run_trials']"
-          rsa_768_p3: "//*[@name='rsa_768_p3']/*[@name='run_trials']"
           rsa_1024_p3: "//*[@name='rsa_1024_p3']/*[@name='run_trials']"
           rsa_2048_p3: "//*[@name='rsa_2048_p3']/*[@name='run_trials']"
-          rsa_768_p4: "//*[@name='rsa_768_p4']/*[@name='run_trials']"
           rsa_1024_p4: "//*[@name='rsa_1024_p4']/*[@name='run_trials']"
           rsa_2048_p4: "//*[@name='rsa_2048_p4']/*[@name='run_trials']"

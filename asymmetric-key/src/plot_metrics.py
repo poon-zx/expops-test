@@ -38,7 +38,7 @@ def _label_from_probe_key(k: str) -> str:
 
 
 def _parse_rsa_cell_label(label: str) -> Optional[Tuple[int, int]]:
-    """Parse probe short keys like rsa_768_p2 -> (768, 2)."""
+    """Parse probe short keys like rsa_1024_p2 -> (1024, 2)."""
     s = str(label).strip()
     if s.endswith("_bench"):
         s = s[: -len("_bench")]
@@ -51,10 +51,10 @@ def _parse_rsa_cell_label(label: str) -> Optional[Tuple[int, int]]:
 @chart()
 def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
     """
-    Heatmap of mean RSA encryption time (ms): rows = key size (768, 1024, 2048),
+    Heatmap of mean RSA encryption time (ms): rows = key size (1024, 2048),
     columns = payload bytes (2, 3, 4). Expects each bench to log mean_encrypt_ms.
     """
-    key_sizes = (768, 1024, 2048)
+    key_sizes = (1024, 2048)
     payload_sizes = (2, 3, 4)
     grid: Dict[Tuple[int, int], float] = {}
 
@@ -83,14 +83,14 @@ def asymmetric_summary_chart(metrics: Dict[str, Any]) -> None:
         for j, ps in enumerate(payload_sizes):
             mat[i, j] = grid.get((ks, ps), np.nan)
 
-    fig, ax = plt.subplots(figsize=(7.5, 4.2))
+    fig, ax = plt.subplots(figsize=(7.5, 3.6))
     im = ax.imshow(mat, aspect="auto", cmap="viridis")
 
     ax.set_xticks(np.arange(len(payload_sizes)), labels=[f"{p} B" for p in payload_sizes])
     ax.set_yticks(np.arange(len(key_sizes)), labels=[f"{ks} bit" for ks in key_sizes])
     ax.set_xlabel("Payload size")
     ax.set_ylabel("RSA key size")
-    ax.set_title("Mean RSA encrypt time (OAEP-SHA256, ms)\n768 bit replaces 512 for PKCS#1 OAEP limits")
+    ax.set_title("Mean RSA encrypt time (OAEP-SHA256, ms)\nNote: this runtime enforces RSA key_size ≥ 1024")
 
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label("mean_encrypt_ms")
