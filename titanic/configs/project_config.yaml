@@ -23,10 +23,13 @@ data:
 experiment:
   cache:
     backend:
-      type: local
-    # object_store:
-    #   type: gcs
-    #   bucket: "<your-bucket>"
+      type: gcp
+      gcp_project: mlops-platform-470017
+      credentials_json: src/firestore.json
+      firebase_api_key: "AIzaSyCLrXkDD7RLxgEWRRInqCKfnN3Yzqp2yrc"
+    object_store:
+      type: gcs
+      bucket: mlops-platform123
 
   parameters:
     test_size: 0.2
@@ -34,17 +37,18 @@ experiment:
 
   pipeline:
     process_adjlist: |
-      data_preprocessing linear_training
-      data_preprocessing nn_training_a
-      data_preprocessing nn_training_b
+      data_preprocessing data_parallel
+      data_parallel seed_parallel
+      seed_parallel linear_training
+      seed_parallel nn_training_a
+      seed_parallel nn_training_b
       linear_training linear_inference
       nn_training_a nn_inference_a
       nn_training_b nn_inference_b
-      linear_inference metrics_comparison
-      nn_inference_a metrics_comparison
-      nn_inference_b metrics_comparison
-      nn_training_a nn_losses
-      nn_training_b nn_losses
+      linear_inference partition_aggregate
+      nn_inference_a partition_aggregate
+      nn_inference_b partition_aggregate
+      partition_aggregate metrics_comparison
 
     processes:
       - name: "data_preprocessing"
@@ -69,6 +73,19 @@ experiment:
           learning_rate: 0.005
           epochs: 60
           batch_size: 64
+
+      - name: "data_parallel"
+        data_parallelism:
+          size: 2
+          data_name: df
+
+      - name: "seed_parallel"
+        seed_parallelism:
+          seeds: [41, 42]
+
+      - name: "partition_aggregate"
+        data_aggregation: true
+        seed_aggregation: true
 
       - name: "linear_inference"
 

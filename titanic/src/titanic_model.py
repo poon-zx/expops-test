@@ -153,6 +153,7 @@ def data_preprocessing(
         If required columns are missing or feature encoding fails.
     """
     test_size = 0.2
+    _ =  None
     @step()
     def load_csv() -> SerializableData:
         """
@@ -320,7 +321,7 @@ def train_and_log_nn(
         learning_rate_init=learning_rate,
         solver="adam",
         activation="relu",
-        alpha=0.0001,
+        alpha=0.001,
         batch_size=min(batch_size, X.shape[0]),
         max_iter=1,
         warm_start=True,
@@ -642,3 +643,14 @@ def nn_inference_b(model, X_test, y_test) -> Dict[str, Any]:
     result = test_inference_binary(model=model, X_test=X_test, y_test=y_test)
     return {"nn_inference_b": result}
 
+@process()
+def partition_aggregate(linear_inference: Dict[str, Any], nn_inference_a: Dict[str, Any], nn_inference_b: Dict[str, Any]):
+    """
+    Aggregate results from data-parallel branches (currently a no-op).
+
+    Parameters
+    ----------
+    rows : dict[str, Any] or None, default=None
+        Placeholder for aggregated branch outputs.
+    """
+    return {}
