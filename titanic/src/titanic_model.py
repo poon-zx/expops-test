@@ -252,7 +252,55 @@ def data_preprocessing(
 
     raw = load_csv()
     engineered = clean_and_engineer(raw=raw)
-    return encode_and_split(raw=engineered, test_size=test_size, random_seed=random_seed)
+    return engineered
+
+
+@process()
+def data_parallel(df: SerializableData) -> Dict[str, Any]:
+    """
+    Convert column-oriented `df` payload into row-wise records before platform split.
+    """
+    frame = pd.DataFrame(df)
+    return {"df": frame.to_dict(orient="records")}
+
+
+@process()
+def preprocess_partition(
+    df: SerializableData,
+    test_size: float = 0.2,
+    random_seed: int = 42,
+) -> Dict[str, Any]:
+    """
+    Encode and split one data-parallel partition for downstream model training.
+    """
+    frame = pd.DataFrame(df)
+    X_all, y = _encode_features(frame)
+
+    rs = int(random_seed) if random_seed is not None else None
+    try:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_all,
+            y,
+            test_size=float(test_size),
+            shuffle=True,
+            stratify=y if len(np.unique(y)) > 1 else None,
+            random_state=rs,
+        )
+    except Exception:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X_all,
+            y,
+            test_size=float(test_size),
+            shuffle=True,
+            random_state=rs,
+        )
+
+    return {
+        "X_train": X_train.astype(float).tolist(),
+        "X_test": X_test.astype(float).tolist(),
+        "y_train": y_train.astype(int).tolist(),
+        "y_test": y_test.astype(int).tolist(),
+    }
 
 
 @step()
