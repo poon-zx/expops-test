@@ -1,2 +1,0 @@
-expops-sklearn
-expops-matplotlib
